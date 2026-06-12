@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"]
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      },
+      "required": ["email", "name", "role", "createdAt"]
+    },
+    "StoreSettings": {
+      "title": "Store Settings",
+      "description": "Store configuration like name, logo, address, phone",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "logoUrl": {
+          "type": "string"
+        },
+        "phoneNumber": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "number"
+        }
+      },
+      "required": ["name", "logoUrl", "phoneNumber", "address", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A product for sale in the store",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number"
+        },
+        "imageUrl": {
+          "type": "string"
+        },
+        "stock": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        }
+      },
+      "required": ["name", "description", "price", "imageUrl", "stock", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A customer order",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "description": "List of cart items stringified or complex objects. Max allowed is bounded by size guard"
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "processing", "shipped", "delivered"]
+        },
+        "trackingNumber": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        }
+      },
+      "required": ["userId", "userName", "items", "totalAmount", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "User"
+      },
+      "description": "Contains user profiles."
+    },
+    "store_settings/info": {
+      "schema": {
+        "$ref": "StoreSettings"
+      },
+      "description": "Contains a single document for store info."
+    },
+    "products/{productId}": {
+      "schema": {
+        "$ref": "Product"
+      },
+      "description": "List of products available in the store."
+    },
+    "orders/{orderId}": {
+      "schema": {
+        "$ref": "Order"
+      },
+      "description": "Orders created by users."
+    }
+  }
+}

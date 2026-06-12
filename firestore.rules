@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      // Bootstrapped admin + runtime admin check
+      return isSignedIn() && (
+        request.auth.token.email == 'mtsmadani2025@gmail.com' || 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // User Model
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'name', 'role', 'createdAt']) &&
+        data.size() == 4 &&
+        data.email is string && data.email.size() <= 200 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.role is string && (data.role == 'user' || data.role == 'admin') &&
+        data.createdAt is number;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin(); // Only admins can list users
+      allow create: if isSignedIn() && 
+                    request.auth.uid == userId && 
+                    isValidUser(incoming()) && 
+                    incoming().role == 'user' && 
+                    incoming().email == request.auth.token.email;
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['name']) && incoming().name is string && incoming().name.size() <= 100) ||
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role']) && incoming().role is string && (incoming().role == 'user' || incoming().role == 'admin'))
+      );
+    }
+    
+    // Admins Collection (for overriding runtime email)
+    match /admins/{adminId} {
+      allow get: if isSignedIn();
+      allow read, write: if false; // Managed manually or by existing admins? Let's say only manually in console so no write.
+    }
+
+    // Store Settings
+    function isValidStoreSettings(data) {
+      return data.keys().hasAll(['name', 'logoUrl', 'phoneNumber', 'address', 'updatedAt']) &&
+        data.size() == 5 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.logoUrl is string && data.logoUrl.size() <= 500 &&
+        data.phoneNumber is string && data.phoneNumber.size() <= 30 &&
+        data.address is string && data.address.size() <= 500 &&
+        data.updatedAt is number;
+    }
+
+    match /store_settings/info {
+      allow read: if true; // Publicly readable
+      allow create: if isAdmin() && isValidStoreSettings(incoming());
+      allow update: if isAdmin() && isValidStoreSettings(incoming());
+    }
+
+    // Products
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'description', 'price', 'imageUrl', 'stock', 'createdAt', 'updatedAt']) &&
+        data.size() == 7 &&
+        data.name is string && data.name.size() <= 100 &&
+        data.description is string && data.description.size() <= 5000 &&
+        data.price is number && data.price >= 0 &&
+        data.imageUrl is string && data.imageUrl.size() <= 1000 &&
+        data.stock is number && data.stock >= 0 &&
+        data.createdAt is number &&
+        data.updatedAt is number;
+    }
+
+    match /products/{productId} {
+      allow read: if true; // Anyone can read products
+      // Only admins can manage products
+      allow create: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isAdmin() && isValidId(productId) && isValidProduct(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(productId);
+    }
+
+    // Orders
+    function isValidOrder(data) {
+      // items will be a stringified JSON array to avoid array complexity in rules
+      return data.keys().hasAny(['userId', 'userName', 'items', 'totalAmount', 'status', 'createdAt', 'updatedAt']) &&
+        (data.trackingNumber == null || (data.trackingNumber is string && data.trackingNumber.size() <= 200)) &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.userName is string && data.userName.size() <= 100 &&
+        data.items is string && data.items.size() <= 20000 && 
+        data.totalAmount is number && data.totalAmount >= 0 &&
+        data.status is string && (data.status == 'pending' || data.status == 'processing' || data.status == 'shipped' || data.status == 'delivered') &&
+        data.createdAt is number &&
+        data.updatedAt is number;
+    }
+    
+    function isValidOrderCreate(data) {
+        return data.keys().hasAll(['userId', 'userName', 'items', 'totalAmount', 'status', 'createdAt', 'updatedAt']) &&
+        data.userId == request.auth.uid &&
+        data.status == 'pending';
+    }
+
+    match /orders/{orderId} {
+      // User can read their own orders, Admins can read all
+      allow get: if isSignedIn() && isValidId(orderId) && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                    isValidId(orderId) && 
+                    isValidOrder(incoming()) && 
+                    isValidOrderCreate(incoming());
+                    
+      // Only admins can update order status or tracking number
+      allow update: if isAdmin() && 
+                    isValidId(orderId) && 
+                    isValidOrder(incoming()) && 
+                    incoming().userId == existing().userId &&
+                    incoming().createdAt == existing().createdAt &&
+                    // Strict update check based on diff
+                    (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+                      incoming().diff(existing()).affectedKeys().hasOnly(['trackingNumber', 'status', 'updatedAt'])
+                    );
+    }
+  }
+}

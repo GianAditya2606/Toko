@@ -1,0 +1,8 @@
+{
+  "name": "Toko Online",
+  "description": "A feature-rich e-commerce landing page with an admin dashboard, real-time products, shopping cart, and Firebase integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
